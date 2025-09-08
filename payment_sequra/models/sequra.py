@@ -1,28 +1,31 @@
-# -*- coding: utf-'8' "-*-"
+# -*- coding: utf-8 -*-
 
 import logging
 import requests
-# import hashlib
 
-from openerp import models, fields, api, _
+from odoo import models, fields, api, _
 
 _logger = logging.getLogger(__name__)
 
 
 class AcquirerSequra(models.Model):
-    _inherit = 'payment.acquirer'
+    _inherit = 'payment.provider'
 
-    def _get_sequra_urls(self):
+    code = fields.Selection(
+        selection_add=[('sequra', 'SeQura')],
+        ondelete={'sequra': 'set default'}
+    )
+
+    sequra_merchant_id = fields.Char('Merchant ID', required_if_provider='sequra', groups='base.group_system')
+    sequra_api_key = fields.Char('API Key', required_if_provider='sequra', groups='base.group_system')
+    sequra_secret_key = fields.Char('Secret Key', required_if_provider='sequra', groups='base.group_system')
+
+    def _get_sequra_api_url(self):
         """ Sequra URLS """
-        if self.environment == 'test':
+        self.ensure_one()
+        if self.state == 'test':
             return 'https://sandbox.sequrapi.com'
         return 'https://live.sequrapi.com'
-
-    @api.model
-    def _get_providers(self):
-        providers = super(AcquirerSequra, self)._get_providers()
-        providers.append(['sequra', 'SeQura'])
-        return providers
 
     def request(self, endpoint, method='POST', data='{}', headers=None):
         if not headers:

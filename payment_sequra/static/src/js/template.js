@@ -1,25 +1,40 @@
-// this .js is no used for now
-odoo.define('payment_sequra', function (require) {
-    "use strict";
-    var ajax = require('web.ajax');
+odoo.define('payment_sequra.payment_form', function (require) {
+    'use strict';
 
-    $(".oe_sequra_payment_form").on("submit", function (e) {
-        var self = this;
-        e.preventDefault();
-        var $oe_sequra_payment_form = $(this);
-        var formData = new FormData($oe_sequra_payment_form[0]);
-        $.ajax({
-            url: '/payment/sequra',
-            type: "POST",
-            dataType: "html",
-            data: formData,
-            cache: false,
-            contentType: false,
-            processData: false
-        }).done(function(res){
-            var response = JSON.parse(res);
-        });
-    });
-    
+    const checkoutForm = require('payment.checkout_form');
+    const manageForm = require('payment.manage_form');
+
+    const sequraForm = {
+        init: function () {
+            this._super.apply(this, arguments);
+        },
+
+        _processPayment: function (provider, paymentOptionId, flow) {
+            if (provider !== 'sequra') {
+                return this._super(...arguments);
+            }
+            // Handle Sequra payment flow
+            return this._rpc({
+                route: '/payment/sequra/create_payment',
+                params: {
+                    'payment_option_id': paymentOptionId,
+                    'access_token': this.options.accessToken,
+                    'reference': this.options.txContext.reference,
+                    'partner_id': this.options.txContext.partner_id,
+                    'amount': this.options.txContext.amount,
+                    'currency_id': this.options.txContext.currency_id,
+                }
+            }).then(response => {
+                if (response.success) {
+                    window.location = response.url;
+                }
+            });
+        },
+    };
+
+    checkoutForm.include(sequraForm);
+    manageForm.include(sequraForm);
+
+    return sequraForm;
 });
 

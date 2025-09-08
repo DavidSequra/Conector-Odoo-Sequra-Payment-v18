@@ -1,21 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<openerp>
+<odoo>
     <data>
         <template id="payment_inherit" inherit_id="website_sale.payment">
-            <xpath expr="//div[@class='container oe_website_sale']//ul[@class='wizard pull-right']" position="before">
+            <xpath expr="//div[hasclass('oe_cart')]" position="before">
                 <t t-raw="0"/>
             </xpath>
         </template>
 
-        <template id="payment" name="Payment Sequra">
-            <t t-call="website_sale.payment">
+        <template id="payment_sequra_form">
+            <div t-att-class="submit_class">
+                <div t-if="acquirer.state == 'test'" class="alert alert-info" role="alert">
+                    <p>
+                        <i class="fa fa-info-circle"/>
+                        <b>Test Mode:</b> You are using Sequra in test mode.
+                    </p>
+                </div>
                 <div t-raw="iframe" />
                 <script type="text/javascript">
                     (function(){
                       window.SequraFormInstance.show();
                     })();
                 </script>
-            </t>
+            </div>
         </template>
 
         <template id="500">

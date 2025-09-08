@@ -1,32 +1,39 @@
 # -*- coding: utf-8 -*-
 
-from openerp import http
-from openerp import release
-from openerp.http import request
-from openerp import SUPERUSER_ID, fields
-from werkzeug.wrappers import BaseResponse as Response
-from openerp.tools.translate import _
-from datetime import datetime
-
-import re
-import os
 import json
-import pytz
 import logging
+import os
+import pprint
+import pytz
+import werkzeug
+
+from odoo import _, fields, http, release, SUPERUSER_ID
+from odoo.http import request
+from werkzeug.wrappers import Response
+
 _logger = logging.getLogger(__name__)
 
 
 class SequraController(http.Controller):
+    _return_url = '/payment/sequra/return'
+    _webhook_url = '/payment/sequra/webhook'
 
     @http.route(['/sequra/shop/confirmation'], type='http', auth="public", website=True)
     def sequra_payment_confirmation(self, **post):
-        cr, uid, context = request.cr, request.uid, request.context
-
         # clean context and session, then redirect to the confirmation page
-        request.website.sale_reset(context=context)
+        request.website.sale_reset()
         return request.redirect('/shop/confirmation')
 
-    @http.route('/checkout/sequra-ipn', type='http', auth='none', methods=['POST'])
+    @http.route(_return_url, type='http', auth='public', methods=['GET', 'POST'], csrf=False)
+    def sequra_return(self, **data):
+        _logger.info("Sequra: entering return handler with data:\n%s", pprint.pformat(data))
+        request.env['payment.transaction'].sudo()._handle_feedback_data('sequra', data)
+        return werkzeug.utils.redirect('/payment/status')
+
+    @http.route(_webhook_url, type='http', auth='public', methods=['POST'], csrf=False)
+    def sequra_webhook(self, **data):
+        _logger.info("Sequra: entering webhook handler with data:\n%s", pprint.pformat(data))
+        request.env['payment.transaction'].sudo()._handle_feedback_data('sequra', data)
     def checkout_sequra_ipn(self, **post):
         _logger.info("********Sequra IPN ***********")
         _logger.info("***************/checkout/sequra-ipn *******************")
