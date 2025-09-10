@@ -1,8 +1,11 @@
-from openerp import api, tools, SUPERUSER_ID
-from openerp.osv import osv, fields, expression
+from odoo import api, fields, models
 
-class product_template(osv.osv):
+class ProductTemplate(models.Model):
     _inherit = 'product.template'
-    _columns = {
-        'ends_in' : fields.char('Service end date',default='P6M',select=True, required=True, translate=False),
-    }
+
+    ends_in = fields.Char(
+        string='Service end date',
+        default='P6M',
+        required=True,
+        index=True
+    )

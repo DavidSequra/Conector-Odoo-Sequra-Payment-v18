@@ -27,27 +27,46 @@ class AcquirerSequra(models.Model):
             return 'https://sandbox.sequrapi.com'
         return 'https://live.sequrapi.com'
 
-    def request(self, endpoint, method='POST', data='{}', headers=None):
-        if not headers:
-            headers = {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            }
-        url = endpoint.find('http') == -1 and self._get_sequra_urls() + endpoint or endpoint
-        if method == 'POST':
-            return requests.post(
+    def _sequra_make_request(self, endpoint=None, method='POST', payload=None, headers=None):
+        """ Make a request to Sequra API.
+        
+        :param str endpoint: The endpoint to be reached by the request
+        :param str method: The HTTP method of the request
+        :param dict payload: The data to send in the request body
+        :param dict headers: The headers to add to the request
+        :return: The JSON-formatted content of the response
+        :rtype: dict
+        :raise ValidationError: if an HTTP error occurs
+        """
+        self.ensure_one()
+
+        base_url = self._get_sequra_api_url()
+        endpoint = endpoint or '/orders'
+        url = endpoint if endpoint.startswith('http') else base_url + endpoint
+
+        headers = headers or {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+
+        try:
+            response = requests.request(
+                method,
                 url,
-                auth=(self.sequra_user, self.sequra_pass),
-                data=data,
-                headers=headers
+                auth=(self.sequra_merchant_id, self.sequra_api_key),
+                json=payload,
+                headers=headers,
+                timeout=10
             )
-        elif method == 'GET':
-            return requests.get(
-                url,
-                auth=(self.sequra_user, self.sequra_pass),
-                headers=headers
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as error:
+            _logger.exception("Error when communicating with Sequra: %s", error)
+            raise ValidationError(
+                _("Could not establish the connection to the API.") if isinstance(
+                    error, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
+                ) else _("The communication with the API failed.")
             )
-        else:
             return requests.put(
                 url,
                 auth=(self.sequra_user, self.sequra_pass),
@@ -65,8 +84,6 @@ class TxSequra(models.Model):
     _inherit = 'payment.transaction'
 
     order_sequra_ref = fields.Char('Sequra order reference')
-    provider = fields.Selection(related='acquirer_id.provider')
-
     sequra_conf_resp_status_code = fields.Char('Confirmation Response Status Code')
     sequra_conf_resp_reason = fields.Text('Confirmation Response Reason')
 
@@ -89,9 +106,9 @@ class SaleOrder(models.Model):
     shipping_method = fields.Char('Sequra Shipping Method')
     # order_id_sha1 = fields.Char('Order Id Sha1', compute='_compute_order_id_sha1', store=True)
 
-    @api.one
     @api.depends('sequra_location')
     def _compute_sequra_ref(self):
-        s_location = self.sequra_location and self.sequra_location.split('/') or None
-        self.order_sequra_ref = s_location and s_location[len(s_location) - 1] or ''
+        for record in self:
+            s_location = record.sequra_location and record.sequra_location.split('/') or None
+            record.order_sequra_ref = s_location and s_location[len(s_location) - 1] or ''
 

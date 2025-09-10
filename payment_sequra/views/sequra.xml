@@ -1,33 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<openerp>
+<odoo>
     <data noupdate="0">
-
-        <template id="sequra_acquirer_first_receive_button">
-            <form class="oe_sequra_payment_form" t-if="acquirer" action="/payment/sequra" method="post" target="_self">
-                <input type="hidden" name="acquirer_id" t-att-value="acquirer.id" />
+        <template id="sequra_payment_submit_button">
+            <form class="sequra_payment_form" t-if="provider" action="/payment/sequra/submit" method="post" target="_self">
+                <input type="hidden" name="provider_id" t-att-value="provider.id" />
                 <input type="hidden" name="payment_method" t-att-value="'i1'" />
 
-                <!-- submit -->
-                <button type="submit" width="100px"
-                    t-att-class="submit_class">
-                    <img t-if="not submit_txt" src="/payment_sequra/static/src/img/sequra_icon.png"/>
-                    <span t-if="submit_txt"><t t-esc="submit_txt"/> <span class="fa fa-long-arrow-right"/></span>
+                <button type="submit" class="btn btn-primary" t-att-class="submit_class">
+                    <img t-if="not submit_txt" src="/payment_sequra/static/src/img/sequra_icon.png" alt="Sequra"/>
+                    <span t-if="submit_txt">
+                        <t t-esc="submit_txt"/> <i class="fa fa-arrow-right"/>
+                    </span>
                 </button>
             </form>
         </template>
 
-        <template id="sequra_acquirer_part_payment_button">
-            <form class="oe_sequra_payment_form" t-if="acquirer" action="/payment/sequra" method="post" target="_self">
-                <input type="hidden" name="acquirer_id" t-att-value="acquirer.id" />
+        <template id="sequra_payment_installments_button">
+            <form class="sequra_payment_form" t-if="provider" action="/payment/sequra/submit" method="post" target="_self">
+                <input type="hidden" name="provider_id" t-att-value="provider.id" />
                 <input type="hidden" name="payment_method" t-att-value="'pp3'" />
 
-                <!-- submit -->
-                <button type="submit" width="100px"
-                    t-att-class="submit_class">
-                    <img t-if="not submit_txt" src="/payment_sequra/static/src/img/sequra_icon.png"/>
-                    <span t-if="submit_txt"><t t-esc="submit_txt"/> <span class="fa fa-long-arrow-right"/></span>
+                <button type="submit" class="btn btn-primary" t-att-class="submit_class">
+                    <img t-if="not submit_txt" src="/payment_sequra/static/src/img/sequra_icon.png" alt="Sequra"/>
+                    <span t-if="submit_txt">
+                        <t t-esc="submit_txt"/> <i class="fa fa-arrow-right"/>
+                    </span>
                 </button>
             </form>
         </template>
     </data>
-</openerp>
+</odoo>
