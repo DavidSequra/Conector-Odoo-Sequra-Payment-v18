@@ -15,25 +15,4 @@
             </xpath>
         </field>
     </record>
-
-    <record id="transaction_form_sequra" model="ir.ui.view">
-        <field name="name">payment.transaction.form.inherit.sequra</field>
-        <field name="model">payment.transaction</field>
-        <field name="inherit_id" ref="payment.payment_transaction_form"/>
-        <field name="arch" type="xml">
-            <xpath expr="//field[@name='reference']" position="after">
-                <field name="sequra_txn_id"/>
-            </xpath>
-
-            <xpath expr="//notebook" position="inside">
-                <page string="Sequra TX Details" invisible="provider_code != 'sequra'">
-                    <group>
-                        <field name="order_sequra_ref" readonly="1"/>
-                        <field name="sequra_conf_resp_status_code"/>
-                        <field name="sequra_conf_resp_reason"/>
-                    </group>
-                </page>
-            </xpath>
-        </field>
-    </record>
 </odoo>

@@ -1,15 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
-        <template id="payment_inherit" inherit_id="website_sale.payment">
-            <xpath expr="//div[hasclass('oe_cart')]" position="before">
-                <t t-raw="0"/>
-            </xpath>
-        </template>
-
         <template id="payment_sequra_form">
             <div t-att-class="submit_class">
-                <div t-if="acquirer.state == 'test'" class="alert alert-info" role="alert">
+                <div t-if="provider.state == 'test'" class="alert alert-info" role="alert">
                     <p>
                         <i class="fa fa-info-circle"/>
                         <b>Test Mode:</b> You are using Sequra in test mode.
@@ -37,4 +31,4 @@
             </t>
         </template>
     </data>
-</openerp>
+</odoo>

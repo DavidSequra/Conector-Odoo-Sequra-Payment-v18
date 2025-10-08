@@ -58,12 +58,12 @@ class SequraController(http.Controller):
                         tx = tx_obj.browse(cr, uid, tx_id)
 
                         post = {
-                            'merchant_id': tx.acquirer_id.sequra_merchant,
+                            'merchant_id': tx.provider_id.sequra_merchant_id,
                         }
 
                         data = self._get_data_json(post, order, 'confirmed')
                         endpoint = order.sequra_location
-                        response = tx.acquirer_id.request(endpoint, method='PUT', data=data)
+                        response = tx.provider_id.request(endpoint, method='PUT', data=data)
 
                         values = {
                             'sequra_conf_resp_status_code': response.status_code,
@@ -75,7 +75,7 @@ class SequraController(http.Controller):
                                 'order_sequra_ref': order_ref,
                             })
                             tx.write(values)
-                            if tx.acquirer_id.send_quotation:
+                            if tx.provider_id.send_quotation:
                                 email_act = tx.sale_order_id.action_quotation_send()
                                 # send the email
                                 if email_act and email_act.get('context'):

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<openerp>
+<odoo>
     <data>
         <record id="view_order_form" model="ir.ui.view">
             <field name="name">sale.order.form</field>
@@ -7,14 +7,14 @@
             <field name="inherit_id" ref="sale.view_order_form"/>
             <field name="arch" type="xml">
                 <xpath expr='//notebook' position='inside'>
-                    <page string="Sequra TX Details" >
-                        <group >
-                            <field name="sequra_location" />
-                            <field name="order_sequra_ref" />
+                    <page string="Sequra TX Details">
+                        <group>
+                            <field name="sequra_location"/>
+                            <field name="order_sequra_ref"/>
                         </group>
                     </page>
                 </xpath>
             </field>
         </record>
     </data>
-</openerp>
+</odoo>
