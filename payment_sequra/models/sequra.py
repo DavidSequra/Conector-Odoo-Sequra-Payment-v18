@@ -61,9 +61,31 @@ class PaymentTransaction(models.Model):
         if self.provider_code != 'sequra':
             return res
 
-        # Provide all the values needed by the JavaScript frontend
+        # Get the proper API URL
+        api_url = self.provider_id._get_sequra_api_url() if hasattr(self.provider_id, '_get_sequra_api_url') else 'https://sandbox.sequrapi.com'
+        
+        # Create a proper HTML form for SeQura payment
+        # This form will be automatically submitted by Odoo's redirect flow
+        form_action = f"{api_url}/orders"
+        return_url = processing_values.get('return_url', '/payment/sequra/return')
+        
+        redirect_form_html = f'''
+        <form id="sequra_payment_form" action="{form_action}" method="post">
+            <input type="hidden" name="merchant_id" value="{self.provider_id.sequra_merchant_id or 'test_merchant'}" />
+            <input type="hidden" name="reference" value="{self.reference}" />
+            <input type="hidden" name="amount" value="{int(self.amount * 100)}" />
+            <input type="hidden" name="currency" value="{self.currency_id.name}" />
+            <input type="hidden" name="return_url" value="{return_url}" />
+            <input type="hidden" name="order_id" value="{self.id}" />
+        </form>
+        <script>
+            document.getElementById('sequra_payment_form').submit();
+        </script>
+        '''
+        
         rendering_values = {
-            'api_url': self.provider_id._get_sequra_api_url() if hasattr(self.provider_id, '_get_sequra_api_url') else 'https://sandbox.sequrapi.com',
+            'redirect_form_html': redirect_form_html,
+            'api_url': api_url,
             'merchant_id': self.provider_id.sequra_merchant_id,
             'reference': self.reference,
             'amount': int(self.amount * 100),  # Convert to cents

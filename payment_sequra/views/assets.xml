@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<openerp>
+<odoo>
     <data>
-        <template id="javascripts_head" inherit_id="website.layout">
-            <xpath expr="//footer[last()]" position="after">
-                <script type="text/javascript" src="/payment_sequra/static/src/js/template.js"></script>
+        <!-- Add SeQura JavaScript to the payment assets -->
+        <template id="payment_sequra_assets" name="SeQura Payment Assets" inherit_id="web.assets_frontend">
+            <xpath expr="." position="inside">
+                <script type="text/javascript" src="/payment_sequra/static/src/js/template.js"/>
             </xpath>
         </template>
     </data>
-</openerp>
+</odoo>
