@@ -1,40 +1,62 @@
-odoo.define('payment_sequra.payment_form', function (require) {
-    'use strict';
+/** @odoo-module */
 
-    const checkoutForm = require('payment.checkout_form');
-    const manageForm = require('payment.manage_form');
+import { PaymentInterface } from "@payment/js/payment_interface";
 
-    const sequraForm = {
-        init: function () {
-            this._super.apply(this, arguments);
-        },
+export class SequraPaymentInterface extends PaymentInterface {
+    
+    //--------------------------------------------------------------------------
+    // Private
+    //--------------------------------------------------------------------------
 
-        _processPayment: function (provider, paymentOptionId, flow) {
-            if (provider !== 'sequra') {
-                return this._super(...arguments);
+    /**
+     * Redirect the customer to SeQura.
+     *
+     * @override method from PaymentInterface
+     * @private
+     * @param {string} provider - The provider of the payment option's provider.
+     * @param {number} paymentOptionId - The id of the payment option handling the transaction.
+     * @param {object} processingValues - The processing values of the transaction.
+     * @return {void}
+     */
+    async _processRedirectPayment(provider, paymentOptionId, processingValues) {
+        if (provider !== 'sequra') {
+            return super._processRedirectPayment(...arguments);
+        }
+        
+        // For SeQura, we typically redirect to their payment page
+        // The processingValues should contain the redirect URL from the backend
+        if (processingValues.api_url && processingValues.reference) {
+            // Create a simple redirect form
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `${processingValues.api_url}/orders`;
+            
+            // Add necessary fields for SeQura
+            const fields = {
+                'merchant_id': processingValues.merchant_id,
+                'reference': processingValues.reference,
+                'amount': processingValues.amount,
+                'currency': processingValues.currency,
+            };
+            
+            for (const [key, value] of Object.entries(fields)) {
+                if (value) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = key;
+                    input.value = value;
+                    form.appendChild(input);
+                }
             }
-            // Handle Sequra payment flow
-            return this._rpc({
-                route: '/payment/sequra/create_payment',
-                params: {
-                    'payment_option_id': paymentOptionId,
-                    'access_token': this.options.accessToken,
-                    'reference': this.options.txContext.reference,
-                    'partner_id': this.options.txContext.partner_id,
-                    'amount': this.options.txContext.amount,
-                    'currency_id': this.options.txContext.currency_id,
-                }
-            }).then(response => {
-                if (response.success) {
-                    window.location = response.url;
-                }
-            });
-        },
-    };
+            
+            document.body.appendChild(form);
+            form.submit();
+        } else {
+            console.error('SeQura: Missing processing values for payment redirect');
+        }
+    }
+}
 
-    checkoutForm.include(sequraForm);
-    manageForm.include(sequraForm);
-
-    return sequraForm;
-});
+// Register the payment interface
+PaymentInterface.register('sequra', SequraPaymentInterface);
 
