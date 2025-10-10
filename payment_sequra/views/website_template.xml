@@ -1,23 +1,56 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
-        <template id="payment_sequra_form">
-            <div t-att-class="submit_class">
-                <div t-if="provider.state == 'test'" class="alert alert-info" role="alert">
-                    <p>
-                        <i class="fa fa-info-circle"/>
-                        <b>Test Mode:</b> You are using Sequra in test mode.
-                    </p>
+        <!-- SeQura Payment Form Template for API-driven Flow -->
+        <template id="sequra_redirect_form" name="SeQura API Payment Form">
+            <form class="oe_sequra_payment_form" method="post">
+                <input type="hidden" name="merchant_id" t-att-value="merchant_id"/>
+                <input type="hidden" name="reference" t-att-value="reference"/>
+                <input type="hidden" name="amount" t-att-value="amount"/>
+                <input type="hidden" name="currency" t-att-value="currency"/>
+                <input type="hidden" name="return_url" t-att-value="return_url"/>
+                <input type="hidden" name="order_id" t-att-value="order_id"/>
+                
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fa fa-lock"></i> Pay with SeQura
+                    </button>
                 </div>
-                <div t-raw="iframe" />
-                <script type="text/javascript">
-                    (function(){
-                      window.SequraFormInstance.show();
-                    })();
-                </script>
-            </div>
+                
+                <div class="text-muted small mt-2">
+                    <i class="fa fa-shield"></i> Secure payment powered by SeQura
+                </div>
+            </form>
+            
+            <style>
+                .payment-loading-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(255, 255, 255, 0.8);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 1000;
+                }
+                
+                .oe_sequra_payment_form {
+                    position: relative;
+                }
+                
+                .sequra-payment-container {
+                    margin-top: 20px;
+                    padding: 20px;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    background: #f9f9f9;
+                }
+            </style>
         </template>
 
+        <!-- Error Template -->
         <template id="500">
             <t t-call="website.layout">
               <div id="wrap">

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
-        <!-- Add SeQura JavaScript to the payment assets -->
-        <template id="payment_sequra_assets" name="SeQura Payment Assets" inherit_id="web.assets_frontend">
-            <xpath expr="." position="inside">
-                <script type="text/javascript" src="/payment_sequra/static/src/js/template.js"/>
+        <!-- SeQura Payment JavaScript Assets -->
+        <template id="payment_sequra_assets" inherit_id="website.layout">
+            <xpath expr="//head" position="inside">
+                <script type="text/javascript" src="/payment_sequra/static/src/js/payment_form.js"/>
             </xpath>
         </template>
     </data>

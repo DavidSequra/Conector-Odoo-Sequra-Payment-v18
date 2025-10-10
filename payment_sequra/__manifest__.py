@@ -18,6 +18,7 @@
     ],
     'data': [
         'security/ir.model.access.csv',
+        'views/assets.xml',
         'views/sequra.xml',
         'views/payment_provider.xml',
         'views/website_template.xml',
@@ -25,11 +26,6 @@
         'views/product.xml',
         'data/sequra.xml'
     ],
-    'assets': {
-        'web.assets_frontend': [
-            'payment_sequra/static/src/js/template.js',
-        ],
-    },
     'images': [
         'static/description/icon.png'
     ],
