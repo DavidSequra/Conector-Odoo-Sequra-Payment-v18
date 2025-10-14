@@ -3,7 +3,7 @@
 {
     'name': 'SeQura Payment Provider',
     'summary': 'SeQura Provider: SeQura Payment Integration for Odoo 18',
-    'version': '18.0.1.1.0',
+        'version': '18.0.1.7.0',  # Changed to force module update
     'description': """SeQura Payment Provider for Odoo 18""",
     'author': 'Raul Fidel Rodríguez Trasanco',
     'website': 'https://github.com/sequra/Conector-Odoo-Sequra-Payment',

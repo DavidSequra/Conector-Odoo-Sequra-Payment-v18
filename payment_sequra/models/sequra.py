@@ -48,16 +48,257 @@ class ProviderSequra(models.Model):
         self.ensure_one()
         if self.code != 'sequra':
             return super()._get_supported_operations()
-        return ['online_redirect']  # SeQura uses API-driven redirect flow
+        return ['online_redirect']
 
     def _get_redirect_form_view(self, is_validation=False):
-        """ Return the view to render the API-driven payment form for SeQura. """
+        """ Return the view to render the redirect form for SeQura. """
+        if self.code != 'sequra':
+            return super()._get_redirect_form_view(is_validation)
+        return 'payment_sequra.sequra_redirect_form'
+
+    def _sequra_make_request_from_transaction(self, transaction):
+        """ Create SeQura order and return response object. """
+        # Prepare the data like the original controller did
+        post_data = {'merchant_id': self.sequra_merchant_id}
+        
+        # Get the order
+        order = transaction.sale_order_ids and transaction.sale_order_ids[0]
+        if not order:
+            # Try to get order from invoice if no sale order
+            if hasattr(transaction, 'invoice_ids') and transaction.invoice_ids:
+                order = transaction.invoice_ids[0].invoice_line_ids.mapped('sale_line_ids.order_id')[:1]
+        
+        if not order:
+            raise Exception("No order found for transaction")
+        
+        # Generate the data JSON like the original controller
+        data = self._get_data_json_for_order(post_data, order)
+        
+        # Make the API call and return the response object
+        endpoint = '/orders'
+        return self._sequra_request(endpoint, data=data)
+
+    def _fetch_sequra_form(self, location, payment_method=None):
+        """ Fetch SeQura payment form. """
+        headers = {'Accept': 'text/html'}
+        endpoint = f'{location}/form_v2'
+        if payment_method:
+            endpoint += f'?product={payment_method}'
+        return self._sequra_request(endpoint, method='GET', headers=headers)
+
+    def _sequra_request(self, endpoint, method='POST', data='{}', headers=None):
+        """ Make authenticated request to SeQura API. """
+        if not headers:
+            headers = {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        
+        # Build full URL
+        url = endpoint if endpoint.startswith('http') else self._get_sequra_api_url() + endpoint
+        
+        # Prepare authentication
+        auth = (self.sequra_api_key, self.sequra_secret_key)
+        
+        if method == 'POST':
+            return requests.post(url, auth=auth, data=data, headers=headers, timeout=30)
+        elif method == 'GET':
+            return requests.get(url, auth=auth, headers=headers, timeout=30)
+        elif method == 'PUT':
+            return requests.put(url, auth=auth, data=data, headers=headers, timeout=30)
+
+    def _get_data_json_for_order(self, post_data, order, state=''):
+        """ Generate SeQura API payload for order - from original controller. """
+        import json
+        import os
+        from odoo import release
+        
+        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+        notify_url = f'{base_url}/checkout/sequra-ipn'
+        return_url = f'{base_url}/sequra/shop/confirmation?payment_method=sq-SQ_PRODUCT_CODE'
+        
+        partner_id = order.partner_id
+        partner_invoice_id = order.partner_invoice_id
+        partner_shipping_id = order.partner_shipping_id
+        
+        company_id = self.env.company
+        currency = company_id.currency_id.name
+        merchant_id = post_data.get('merchant_id')
+        
+        merchant_values = {
+            "id": merchant_id,
+            "notify_url": notify_url,
+            "return_url": return_url,
+            "notification_parameters": {"test": 'test'}
+        }
+        
+        payload = {
+            "order": {
+                "state": state,
+                "merchant": merchant_values,
+                "merchant_reference": {"order_ref_1": order.name},
+                "cart": {
+                    "cart_ref": order.name,
+                    "currency": currency or "EUR",
+                    "gift": False,
+                    "items": self._get_items_for_order(order, ''),
+                    "order_total_with_tax": int(round(order.amount_total * 100, 2))
+                },
+                "delivery_address": self._get_address_for_partner(partner_shipping_id),
+                "invoice_address": self._get_address_for_partner(partner_invoice_id),
+                "customer": self._get_customer_data_for_partner(partner_id, order.id),
+                "delivery_method": {"name": "no shipping"},
+                "gui": {"layout": "desktop"},
+                "platform": {
+                    "name": "Odoo",
+                    "version": release.version,
+                    "uname": " ".join(os.uname()),
+                    "db_name": "postgresql",
+                    "db_version": "15.0"
+                }
+            }
+        }
+        
+        return json.dumps(payload)
+
+    def _get_customer_data_for_partner(self, partner_id, order_id):
+        """ Get customer data for SeQura API. """
+        import pytz
+        from odoo import fields
+        
+        # Get previous orders
+        previous_orders_records = self.env['sale.order'].sudo().search([
+            ('partner_id', '=', partner_id.id),
+            ('id', '!=', order_id)
+        ], limit=10, order='create_date desc')
+        
+        previous_orders = [{
+            'created_at': fields.Datetime.from_string(o.create_date).replace(
+                tzinfo=pytz.timezone(o.partner_id.tz or 'Europe/Madrid'), 
+                microsecond=0
+            ).isoformat(),
+            'amount': int(round(o.amount_total * 100, 2)),
+            'currency': o.currency_id.name
+        } for o in previous_orders_records]
+        
+        customer = self._get_address_for_partner(partner_id)
+        
+        # Get IP address - since we're in provider context, we can't access request
+        # We'll use a default or try to get it from transaction context
+        ip = "127.0.0.1"  # Default IP
+        
+        customer.update({
+            'email': partner_id.email or "",
+            'language_code': "es-ES",
+            'ref': partner_id.id,
+            'company': partner_id.company_id.name or "",
+            'logged_in': 'unknown',
+            'ip_number': ip,
+            'user_agent': "",
+            'vat_number': partner_id.company_id.vat or "",
+            'previous_orders': previous_orders
+        })
+        
+        return customer
+
+    def _get_address_for_partner(self, partner_id):
+        """ Get address data for SeQura API. """
+        def _partner_split_name(partner_name):
+            name_parts = partner_name.split()
+            return [' '.join(name_parts[:-1]), ' '.join(name_parts[-1:])]
+        
+        return {
+            "given_names": _partner_split_name(partner_id.name)[1],
+            "surnames": _partner_split_name(partner_id.name)[0],
+            "company": partner_id.company_id.name or "",
+            "address_line_1": partner_id.street or "",
+            "address_line_2": partner_id.street2 or "",
+            "postal_code": partner_id.zip or "",
+            "city": partner_id.city or "",
+            "country_code": partner_id.country_id.code or "",
+            "phone": partner_id.phone or "",
+            "mobile_phone": partner_id.mobile or "",
+            "nin": partner_id.vat[2:] if partner_id.vat else ""
+        }
+
+    def _get_items_for_order(self, order, shipping_name):
+        """ Get order items for SeQura API. """
+        items = []
+        for line in order.order_line:
+            price_subtotal = line.price_subtotal
+            total_without_tax = int(round(price_subtotal * 100, 2))
+            price_without_tax = int(round((price_subtotal / line.product_uom_qty) * 100, 2))
+            
+            # Calculate tax
+            tax = sum(line.tax_id.mapped('amount')) * price_subtotal / 100
+            total_with_tax = int(round((price_subtotal + tax) * 100, 2))
+            price_with_tax = int(round(((price_subtotal + tax) / line.product_uom_qty) * 100, 2))
+            
+            if order.carrier_id.name != line.name:
+                item = {
+                    "reference": str(line.product_id.id),
+                    "name": line.name,
+                    "quantity": int(line.product_uom_qty),
+                    "price_with_tax": price_with_tax,
+                    "total_with_tax": total_with_tax,
+                    "downloadable": False,
+                    "product_id": line.product_id.id,
+                }
+                
+                if line.product_id.type == 'service':
+                    item['type'] = 'service'
+                    item['ends_in'] = getattr(line.product_id, 'ends_in', 'P6M')
+            else:
+                item = {
+                    "type": "handling",
+                    "reference": "Costes de envío",
+                    "name": shipping_name,
+                    "tax_rate": 0,
+                    "total_with_tax": total_with_tax,
+                    "total_without_tax": total_without_tax,
+                }
+            
+            items.append(item)
+        
+        return items
+
+    def _get_sequra_api_url(self):
+        """ Return the appropriate SeQura API URL based on provider state. """
+        self.ensure_one()
+        if self.state == 'test':
+            return 'https://sandbox.sequrapi.com'
+        return 'https://live.sequrapi.com'
+
+    # Method to render payment form - restored from original
+    def _get_redirect_form_view(self, is_validation=False):
+        """ Return the view to render the payment form for SeQura. """
         if self.code != 'sequra':
             return super()._get_redirect_form_view(is_validation)
         return self.env.ref('payment_sequra.sequra_redirect_form', raise_if_not_found=False)
 
-    def _get_sequra_api_url(self):
-        """ Return the appropriate SeQura API URL based on provider state. """
+    def _sequra_make_request(self, endpoint, method='POST', data=None, headers=None):
+        """ Make authenticated request to SeQura API. """
+        self.ensure_one()
+        if not headers:
+            headers = {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        
+        url = endpoint if endpoint.startswith('http') else self._get_sequra_api_url() + endpoint
+        auth = (self.sequra_api_key, self.sequra_secret_key)
+        
+        if method == 'POST':
+            response = requests.post(url, auth=auth, data=data, headers=headers, timeout=30)
+        elif method == 'GET':
+            response = requests.get(url, auth=auth, headers=headers, timeout=30)
+        elif method == 'PUT':
+            response = requests.put(url, auth=auth, data=data, headers=headers, timeout=30)
+        else:
+            raise ValueError(f"Unsupported HTTP method: {method}")
+        
+        _logger.info("SeQura API %s %s - Status: %s", method, url, response.status_code)
+        return response
         self.ensure_one()
         if self.state == 'test':
             return 'https://sandbox.sequrapi.com'

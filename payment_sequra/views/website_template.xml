@@ -1,51 +1,122 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
+        <!-- SeQura Payment Form Template - restored from original -->
+        <template id="payment" name="SeQura Payment Page">
+            <t t-call="website.layout">
+                <div id="wrap">
+                    <div class="container">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h3>Pago con SeQura</h3>
+                                <div class="panel panel-default">
+                                    <div class="panel-body">
+                                        <!-- SeQura iframe will be rendered here -->
+                                        <t t-if="iframe">
+                                            <t t-raw="iframe"/>
+                                        </t>
+                                        <t t-if="not iframe">
+                                            <div class="alert alert-warning">
+                                                No se pudo cargar el formulario de pago de SeQura.
+                                            </div>
+                                        </t>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="panel panel-default">
+                                    <div class="panel-heading">
+                                        <h4>Resumen del pedido</h4>
+                                    </div>
+                                    <div class="panel-body">
+                                        <t t-if="order">
+                                            <p><strong>Pedido:</strong> <t t-esc="order.name"/></p>
+                                            <p><strong>Total:</strong> <t t-esc="order.amount_total"/> <t t-esc="order.currency_id.symbol"/></p>
+                                        </t>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </template>
+
+        <!-- Error page template -->
+        <template id="sequra_error" name="SeQura Payment Error">
+            <t t-call="website.layout">
+                <div id="wrap">
+                    <div class="container">
+                        <div class="row">
+                            <div class="col-md-12">
+                                <h3>Error en el pago</h3>
+                                <div class="alert alert-danger">
+                                    <t t-esc="error"/>
+                                </div>
+                                <a href="/shop" class="btn btn-primary">Volver a la tienda</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </template>
+
         <!-- SeQura Payment Form Template for API-driven Flow -->
         <template id="sequra_redirect_form" name="SeQura API Payment Form">
-            <form class="oe_sequra_payment_form" method="post">
-                <input type="hidden" name="merchant_id" t-att-value="merchant_id"/>
-                <input type="hidden" name="reference" t-att-value="reference"/>
+            <!-- Include redirect URL in a data attribute for JavaScript to use -->
+            <div class="sequra-payment-container" 
+                 t-if="sequra_redirect_url" 
+                 t-att-data-sequra-redirect-url="sequra_redirect_url"
+                 style="display:none;">
+            </div>
+            
+            <!-- Fallback form for cases where we don't have direct URL -->
+            <form method="post" t-att-action="api_url" style="display:none;" id="sequra_redirect_form">
                 <input type="hidden" name="amount" t-att-value="amount"/>
                 <input type="hidden" name="currency" t-att-value="currency"/>
-                <input type="hidden" name="return_url" t-att-value="return_url"/>
-                <input type="hidden" name="order_id" t-att-value="order_id"/>
-                
-                <div class="form-group">
-                    <button type="submit" class="btn btn-primary btn-block">
-                        <i class="fa fa-lock"></i> Pay with SeQura
-                    </button>
-                </div>
-                
-                <div class="text-muted small mt-2">
-                    <i class="fa fa-shield"></i> Secure payment powered by SeQura
-                </div>
+                <input type="hidden" name="reference" t-att-value="reference"/>
             </form>
             
+            <div class="text-center">
+                <div class="mb-3">
+                    <i class="fa fa-spinner fa-spin fa-2x"></i>
+                </div>
+                <p>Redirigiendo a SeQura...</p>
+                <small class="text-muted">Si no es redirigido automáticamente, 
+                    <a href="#" onclick="document.getElementById('sequra_redirect_form').submit();">haga clic aquí</a>
+                </small>
+            </div>
+            
+            <script type="text/javascript">
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Check for direct redirect URL first
+                    var redirectContainer = document.querySelector('[data-sequra-redirect-url]');
+                    if (redirectContainer) {
+                        var redirectUrl = redirectContainer.getAttribute('data-sequra-redirect-url');
+                        if (redirectUrl) {
+                            console.log('SeQura: Redirecting to', redirectUrl);
+                            window.location.href = redirectUrl;
+                            return;
+                        }
+                    }
+                    
+                    // Fallback: Auto-submit the form after page loads
+                    setTimeout(function() {
+                        var form = document.getElementById('sequra_redirect_form');
+                        if (form) {
+                            form.submit();
+                        }
+                    }, 1000);
+                });
+            </script>
+            
             <style>
-                .payment-loading-overlay {
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: rgba(255, 255, 255, 0.8);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 1000;
-                }
-                
-                .oe_sequra_payment_form {
-                    position: relative;
-                }
-                
-                .sequra-payment-container {
-                    margin-top: 20px;
-                    padding: 20px;
-                    border: 1px solid #ddd;
-                    border-radius: 5px;
+                .sequra-loading {
+                    text-align: center;
+                    padding: 40px;
                     background: #f9f9f9;
+                    border-radius: 5px;
+                    border: 1px solid #ddd;
                 }
             </style>
         </template>

@@ -1,4 +1,4 @@
-// SeQura Payment Form Handler - Plain JavaScript/jQuery Version
+// SeQura Payment Form Handler - Direct Approach
 (function() {
     'use strict';
     
@@ -9,164 +9,89 @@
             return;
         }
         
-        console.log('SeQura Payment: Initializing payment form handler +4');
+        console.log('SeQura Payment: Initializing direct redirect handler v9');
         
-        // Handle SeQura payment form submission
-        $(document).on('submit', '.oe_sequra_payment_form', function(ev) {
-            ev.preventDefault();
-            var $form = $(this);
+        // Function to get SeQura redirect URL directly
+        function getSequraRedirectUrl(providerId, callback) {
+            console.log('SeQura Payment: Getting redirect URL for provider', providerId);
             
-            console.log('SeQura Payment: Form submitted');
-            
-            // Show loading indicator
-            showLoadingIndicator($form);
-            
-            // Collect form data
-            var formData = new FormData($form[0]);
-            
-            // Make API call to SeQura endpoint
+            // Make AJAX call to create transaction and get redirect URL
             $.ajax({
-                url: '/payment/sequra/process',
-                type: 'POST',
-                dataType: 'json',
-                data: formData,
-                cache: false,
-                contentType: false,
-                processData: false,
-                timeout: 30000
-            }).done(function(response) {
-                console.log('SeQura Payment: API response received', response);
-                handleApiResponse(response);
-            }).fail(function(xhr, status, error) {
-                console.error('SeQura Payment: API error', status, error);
-                handleApiError(xhr, status, error);
-            }).always(function() {
-                hideLoadingIndicator($form);
+                url: '/shop/payment/transaction/' + providerId,
+                method: 'POST',
+                data: {
+                    'access_token': $('input[name="access_token"]').val() || '',
+                    'csrf_token': $('input[name="csrf_token"]').val() || ''
+                },
+                success: function(data) {
+                    console.log('SeQura Payment: Transaction created, checking for redirect URL');
+                    
+                    // Look for sequra_redirect_url in the response
+                    if (data && typeof data === 'string') {
+                        var match = data.match(/sequra_redirect_url['"]\s*:\s*['"]([^'"]+)['"]/);
+                        if (match && match[1]) {
+                            console.log('SeQura Payment: Found redirect URL:', match[1]);
+                            callback(match[1]);
+                            return;
+                        }
+                    }
+                    
+                    console.log('SeQura Payment: No redirect URL found in response');
+                    callback(null);
+                },
+                error: function(xhr, status, error) {
+                    console.error('SeQura Payment: Error getting redirect URL:', error);
+                    callback(null);
+                }
             });
+        }
+        
+        // Intercept "Pay Now" button click for SeQura
+        $(document).on('click', 'button[name="o_payment_submit_button"]', function(ev) {
+            var selectedProvider = $('input[name="provider_id"]:checked');
+            
+            if (selectedProvider.length && selectedProvider.data('provider-code') === 'sequra') {
+                console.log('SeQura Payment: Intercepting Pay Now button for SeQura');
+                ev.preventDefault();
+                ev.stopPropagation();
+                
+                var providerId = selectedProvider.val();
+                var $button = $(this);
+                var originalText = $button.text();
+                
+                // Show loading state
+                $button.prop('disabled', true).text('Redirecting to SeQura...');
+                
+                // Get redirect URL and redirect
+                getSequraRedirectUrl(providerId, function(redirectUrl) {
+                    if (redirectUrl) {
+                        console.log('SeQura Payment: Redirecting to:', redirectUrl);
+                        window.location.href = redirectUrl;
+                    } else {
+                        console.log('SeQura Payment: Fallback to normal flow');
+                        $button.prop('disabled', false).text(originalText);
+                        // Let the normal flow continue by removing our handler and clicking again
+                        $button.off('click').trigger('click');
+                    }
+                });
+                
+                return false;
+            }
         });
         
-        /**
-         * Handle successful API response from SeQura
-         */
-        function handleApiResponse(response) {
-            if (response.success && response.redirect_url) {
-                console.log('SeQura Payment: Redirecting to', response.redirect_url);
-                // Redirect to SeQura payment page
-                window.location.href = response.redirect_url;
-            } else if (response.success && response.payment_form_html) {
-                console.log('SeQura Payment: Displaying inline form');
-                // Display inline payment form from SeQura
-                displayPaymentForm(response.payment_form_html);
-            } else {
-                // Handle error
-                var errorMsg = response.error || 'Payment processing failed. Please try again.';
-                console.error('SeQura Payment: Response error', errorMsg);
-                showError(errorMsg);
+        // Legacy handlers for other approaches
+        $(document).on('submit', '#payment_method', function(ev) {
+            var selectedProvider = $('input[name="provider_id"]:checked');
+            if (selectedProvider.length && selectedProvider.data('provider-code') === 'sequra') {
+                console.log('SeQura Payment: Form submission intercepted, but should be handled by button click');
             }
-        }
-        
-        /**
-         * Handle API errors
-         */
-        function handleApiError(xhr, status, error) {
-            console.error('SeQura API error:', status, error);
-            var errorMessage = 'Unable to process payment. Please try again or contact support.';
-            
-            if (xhr.responseJSON && xhr.responseJSON.error) {
-                errorMessage = xhr.responseJSON.error;
-            }
-            
-            showError(errorMessage);
-        }
-        
-        /**
-         * Display payment form from SeQura
-         */
-        function displayPaymentForm(formHtml) {
-            // Create a container for the SeQura form
-            var $container = $('<div class="sequra-payment-container">').html(formHtml);
-            
-            // Find the payment form
-            var $paymentForm = $('.oe_sequra_payment_form').first();
-            
-            // Replace the current form with SeQura's form
-            $paymentForm.parent().append($container);
-            $paymentForm.hide();
-        }
-        
-        /**
-         * Show loading indicator
-         */
-        function showLoadingIndicator($form) {
-            var $submitBtn = $form.find('button[type="submit"], input[type="submit"]');
-            $submitBtn.prop('disabled', true);
-            
-            // Change icon to spinner
-            var $icon = $submitBtn.find('.fa');
-            if ($icon.length) {
-                $icon.removeClass('fa-lock').addClass('fa-spinner fa-spin');
-            }
-            
-            // Add loading text
-            var originalText = $submitBtn.data('original-text') || $submitBtn.text();
-            if (!$submitBtn.data('original-text')) {
-                $submitBtn.data('original-text', originalText);
-            }
-            $submitBtn.html('<i class="fa fa-spinner fa-spin"></i> Processing...');
-            
-            // Add loading overlay
-            if (!$form.find('.payment-loading-overlay').length) {
-                $form.append('<div class="payment-loading-overlay"><i class="fa fa-spinner fa-spin fa-2x"></i></div>');
-            }
-        }
-        
-        /**
-         * Hide loading indicator
-         */
-        function hideLoadingIndicator($form) {
-            var $submitBtn = $form.find('button[type="submit"], input[type="submit"]');
-            $submitBtn.prop('disabled', false);
-            
-            // Restore original text
-            var originalText = $submitBtn.data('original-text');
-            if (originalText) {
-                $submitBtn.html(originalText);
-            }
-            
-            $form.find('.payment-loading-overlay').remove();
-        }
-        
-        /**
-         * Show error message
-         */
-        function showError(message) {
-            // Remove existing alerts
-            $('.sequra-payment-alert').remove();
-            
-            // Create error alert
-            var $alert = $('<div class="alert alert-danger sequra-payment-alert" role="alert">')
-                .html('<i class="fa fa-exclamation-triangle"></i> ' + message);
-            
-            // Insert before the first payment form
-            var $paymentForm = $('.oe_sequra_payment_form').first();
-            if ($paymentForm.length) {
-                $paymentForm.before($alert);
-            } else {
-                $('body').prepend($alert);
-            }
-            
-            // Auto-hide after 10 seconds
-            setTimeout(function() {
-                $alert.fadeOut();
-            }, 10000);
-        }
+        });
     }
     
-    // Initialize when DOM is ready
+    // Initialize when ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initializeSequraPayment);
     } else {
         initializeSequraPayment();
     }
-    
 })();

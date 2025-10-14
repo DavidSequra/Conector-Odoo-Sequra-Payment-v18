@@ -11,6 +11,9 @@ class PaymentTransaction(models.Model):
     _inherit = 'payment.transaction'
 
     sequra_txn_id = fields.Char('Sequra Transaction ID')
+    order_sequra_ref = fields.Char('Sequra order reference')
+    sequra_conf_resp_status_code = fields.Char('Confirmation Response Status Code')
+    sequra_conf_resp_reason = fields.Text('Confirmation Response Reason')
 
     def _get_specific_rendering_values(self, processing_values):
         """ Override of payment to return Sequra-specific rendering values.
@@ -24,17 +27,52 @@ class PaymentTransaction(models.Model):
         if self.provider_code != 'sequra':
             return res
 
-        payload = self._sequra_prepare_payment_request_payload()
-        response = self.provider_id._sequra_make_request(payload=payload)
-        
-        # Extract the payment link from the response
-        # SeQura returns Location header with order URL
-        rendering_values = {
-            'api_url': self.provider_id._get_sequra_api_url(),
-            'sequra_order_url': response.get('location') or response.get('order_url'),
-            'merchant_id': self.provider_id.sequra_merchant_id,
-        }
-        return rendering_values
+        # For SeQura, we call the API immediately and return redirect URL
+        try:
+            # Make the call to SeQura API
+            response = self.provider_id._sequra_make_request_from_transaction(self)
+            
+            if response.status_code == 204:
+                # Success - get location and create redirect URL
+                location = response.headers.get('Location')
+                if location:
+                    # Save location to order for future reference
+                    if self.sale_order_ids:
+                        self.sale_order_ids[0].write({'sequra_location': location})
+                    
+                    # Return the SeQura form URL for auto-redirect
+                    sequra_form_url = f"{location}/form_v2"
+                    rendering_values = {
+                        'sequra_redirect_url': sequra_form_url,  # Will be used by JavaScript for auto-redirect
+                        'auto_redirect_script': f"""
+                        <script type="text/javascript">
+                            console.log('SeQura: Auto-redirecting to {sequra_form_url}');
+                            setTimeout(function() {{
+                                window.location.href = '{sequra_form_url}';
+                            }}, 1000);
+                        </script>
+                        """,
+                    }
+                    res.update(rendering_values)
+                    return res
+                else:
+                    raise ValidationError("SeQura did not return a redirect URL")
+            else:
+                raise ValidationError(f"SeQura API error: {response.status_code} - {response.text}")
+                
+        except Exception as e:
+            # Log the error and fallback to error handling
+            _logger.exception("SeQura API call failed: %s", str(e))
+            # Instead of failing, let's redirect to our error endpoint
+            base_url = self.provider_id.get_base_url()
+            rendering_values = {
+                'api_url': f"{base_url}/payment/sequra/redirect",
+                'reference': self.reference,
+                'amount': self.amount,
+                'currency': self.currency_id.name,
+            }
+            res.update(rendering_values)
+            return res
 
     def _sequra_prepare_payment_request_payload(self):
         """ Create the payload for the payment request based on the transaction values.
@@ -279,11 +317,31 @@ class PaymentTransaction(models.Model):
             }
         }
         
-        _logger.info("SeQura complete payload keys: %s", list(payload.keys()))
-        _logger.info("Order keys: %s", list(payload.get('order', {}).keys()))
-        _logger.info("Merchant ID: %s", payload.get('order', {}).get('merchant', {}).get('id'))
-        
         return payload
+
+    def _send_mail(self):
+        """ Send quotation email - restored from original. """
+        if not self.sale_order_ids:
+            return True
+        
+        order = self.sale_order_ids[0]
+        template = self.env.ref('sale.email_template_edi_sale', raise_if_not_found=False)
+        if not template:
+            return True
+        
+        email_ctx = {
+            'default_model': 'sale.order',
+            'default_res_id': order.id,
+            'default_use_template': bool(template),
+            'default_template_id': template.id,
+            'default_composition_mode': 'comment',
+            'mark_so_as_sent': True,
+            'default_email_layout_xmlid': "mail.mail_notification_paynow",
+        }
+        
+        composer = self.env['mail.compose.message'].with_context(email_ctx).create({})
+        composer.send_mail()
+        return True
 
     def _get_tx_from_notification_data(self, provider_code, notification_data):
         """ Override of payment to find the transaction based on Sequra data.
